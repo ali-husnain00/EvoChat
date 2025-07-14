@@ -7,6 +7,12 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true },
     avatar: { type: String }, 
     isOnline: { type: Boolean, default: false },
+    contacts:[
+      {
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+        addedAt: { type: Date, default: Date.now }
+      }
+    ]
   },
   { timestamps: true }
 );
