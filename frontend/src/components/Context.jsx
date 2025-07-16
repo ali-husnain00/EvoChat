@@ -32,33 +32,7 @@ const ChatContextProvider = ({ children }) => {
         }
     };
 
-    const updateStatus = async () => {
-        try {
-            const res = await fetch(`${BASE_URL}/updateStatus`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                credentials: "include",
-            });
-            if (res.ok) {
-                console.error("Status updated successfully");
-            }
-            else {
-                console.error("Failed to update status");
-            }
-
-        } catch (error) {
-            console.error("Error updating status:", error);
-        }
-    }
-
-   useEffect(() =>{
-     if(user){
-        updateStatus();
-    }
-   },[user])
-
+    
     useEffect(() => {
         getLoggedInUser();
     }, []);
@@ -68,7 +42,7 @@ const ChatContextProvider = ({ children }) => {
         getLoggedInUser,
         user,
         setUser,
-        loading
+        loading,
     }
 
     return (

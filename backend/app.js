@@ -9,6 +9,18 @@ import connectDb from "./config/db.js";
 import user from "./model/user.js";
 import verifyToken from "./middlewares/verifyToken.js";
 import uploads from "./middlewares/multer.js";
+import { Server } from "socket.io";
+import http from "http";
+import chat from "./model/chat.js";
+import message from "./model/message.js";
+
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:5173",
+    credentials: true,
+  },
+});
 
 dotenv.config();
 connectDb();
@@ -27,6 +39,57 @@ app.use(cookieParser());
 
 app.get("/", (req, res) => {
   res.send("App is working");
+});
+
+io.on("connection", (socket) => {
+  console.log(`✅ Socket connected: ${socket.id}`);
+
+  socket.on("online", async (userId) => {
+    socket.userId = userId;
+    try {
+      const existingUser = await user.findById(userId);
+      if (existingUser) {
+        existingUser.isOnline = true;
+        await existingUser.save();
+        console.log(`🟢 ${existingUser.username} is online`);
+        socket.broadcast.emit("userOnline", { userId });
+      }
+    } catch (err) {
+      console.error("❌ Error marking user online:", err);
+    }
+  });
+
+  socket.on("joinChat", (chatId) => {
+    socket.join(chatId);
+    console.log(`📥 Socket ${socket.id} joined chat: ${chatId}`);
+  });
+
+  socket.on("typing", (data) => {
+    const { chatId, userId } = data;
+    socket.to(chatId).emit("userTyping", { userId });
+  });
+
+  socket.on("newMessage", (data) => {
+    const { chatId, message } = data;
+    socket.to(chatId).emit("messageReceived", message);
+  });
+
+  socket.on("disconnect", async () => {
+    if (socket.userId) {
+      try {
+        const existingUser = await user.findById(socket.userId);
+        if (existingUser) {
+          existingUser.isOnline = false;
+          await existingUser.save();
+          console.log(`🔴 ${existingUser.username} is offline`);
+          socket.broadcast.emit("userOffline", { userId: socket.userId });
+        }
+      } catch (err) {
+        console.error("❌ Error marking user offline:", err);
+      }
+    }
+    console.log(`⚠️ Socket disconnected: ${socket.id}`);
+  });
 });
 
 app.post("/register", async (req, res) => {
@@ -166,7 +229,7 @@ app.post("/addContact", verifyToken, async (req, res) => {
       return res.status(404).send({ msg: "User not found!" });
     }
 
-    const contact = await user.findOne({ email }); 
+    const contact = await user.findOne({ email });
     if (!contact) {
       return res.status(404).send({ msg: "Contact not found!" });
     }
@@ -195,23 +258,93 @@ app.post("/addContact", verifyToken, async (req, res) => {
   }
 });
 
-app.put("/updateStatus", verifyToken, async (req, res) => {
-  const userId = req.user.id; 
+app.post("/getOrCreateChat", verifyToken, async (req, res) => {
+  const { receiverId } = req.body;
+  const userId = req.user.id;
   try {
     const existingUser = await user.findById(userId);
-    if (!existingUser) {  
+    if (!existingUser) {
       return res.status(404).send({ msg: "User not found!" });
     }
-    existingUser.isOnline = !existingUser.isOnline;
-    await existingUser.save();
-    res.status(200).send({ msg: "Status updated successfully!" });
+    const receiver = await user.findById(receiverId);
+    if (!receiver) {
+      return res.status(404).send({ msg: "Receiver not found!" });
+    }
+    // Check if chat already exists
+    const chatExists = await chat.findOne({
+      isGroupChat: false,
+      users: { $all: [userId, receiverId] },
+    });
+
+    if (!chatExists) {
+      // Create new chat
+      const newChat = await chat.create({
+        chatName: `${existingUser.username} & ${receiver.username}`,
+        isGroupChat: false,
+        users: [userId, receiverId],
+      });
+      const messages = await message
+        .find({ chat: newChat._id })
+        .sort({ createdAt: 1 });
+      return res.status(200).send({ chatId: newChat._id, messages });
+    }
+
+    // If chat exists, return the chat ID and messages
+    const messages = await message
+      .find({ chat: chatExists._id })
+      .sort({ createdAt: 1 });
+    res.status(200).send({ chatId: chatExists._id, messages });
   } catch (error) {
-    res.status(500).send({ msg: "Server error while updating status!" });
+    res
+      .status(500)
+      .send({ msg: "Server error while getting or creating chat!" });
     console.error(error);
   }
 });
 
+app.post(
+  "/sendMessage",
+  verifyToken,
+  uploads.single("image"),
+  async (req, res) => {
+    const { chatId, content } = req.body;
+    const userId = req.user.id;
+    try {
+      const existingChat = await chat.findById(chatId);
+      if (!existingChat) {
+        return res.status(404).send({ msg: "Chat not found!" });
+      }
+      if (!content && !req.file) {
+        return res
+          .status(400)
+          .send({ msg: "Message must have text or image." });
+      }
+
+      const newMessage = await message.create({
+        sender: userId,
+        content,
+        chat: chatId,
+      });
+
+      if (req.file) {
+        newMessage.image = req.file.filename;
+        await newMessage.save();
+      }
+
+      existingChat.latestMessage = newMessage._id;
+      await existingChat.save();
+
+      res
+        .status(200)
+        .send({ msg: "Message sent successfully!", message: newMessage });
+    } catch (error) {
+      res.status(500).send({ msg: "Server error while sending message!" });
+      console.error(error);
+    }
+  }
+);
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
