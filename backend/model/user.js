@@ -12,7 +12,13 @@ const userSchema = new mongoose.Schema(
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
         addedAt: { type: Date, default: Date.now }
       }
-    ]
+    ],
+    blockedUsers: [
+      {
+        type : mongoose.Schema.Types.ObjectId, 
+        ref: "User"
+      }
+    ],
   },
   { timestamps: true }
 );

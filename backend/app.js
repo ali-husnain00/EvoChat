@@ -208,7 +208,10 @@ app.get("/getMyContacts", verifyToken, async (req, res) => {
   try {
     const existingUser = await user
       .findById(uId)
-      .populate("contacts.userId", "_id username email avatar isOnline");
+      .populate(
+        "contacts.userId",
+        "_id username email avatar isOnline createdAt blockedUsers"
+      );
 
     const contacts = existingUser.contacts.map((contact) => contact.userId);
     res.status(200).send(contacts);
@@ -286,6 +289,9 @@ app.post("/getOrCreateChat", verifyToken, async (req, res) => {
       const messages = await message
         .find({ chat: newChat._id })
         .sort({ createdAt: 1 });
+        if (newChat.deletedBy?.includes(userId)) {
+          return res.status(200).send({ chatId: newChat._id, messages: [] });
+        }
       return res.status(200).send({ chatId: newChat._id, messages });
     }
 
@@ -293,6 +299,11 @@ app.post("/getOrCreateChat", verifyToken, async (req, res) => {
     const messages = await message
       .find({ chat: chatExists._id })
       .sort({ createdAt: 1 });
+
+    if (chatExists.deletedBy?.includes(userId)) {
+      return res.status(200).send({ chatId: chatExists._id, messages: [] });
+    }
+
     res.status(200).send({ chatId: chatExists._id, messages });
   } catch (error) {
     res
@@ -343,6 +354,101 @@ app.post(
     }
   }
 );
+
+app.post("/clearChat", verifyToken, async (req, res) => {
+  const { chatId } = req.body;
+  const userId = req.user.id;
+
+  try {
+    const existingChat = await chat.findById(chatId);
+    if (!existingChat) {
+      return res.status(404).send({ msg: "Chat not found!" });
+    }
+
+    if (!existingChat.users.includes(userId)) {
+      return res
+        .status(403)
+        .send({ msg: "You are not a member of this chat!" });
+    }
+
+    if (!existingChat.deletedBy?.includes(userId)) {
+      existingChat.deletedBy = existingChat.deletedBy || [];
+      existingChat.deletedBy.push(userId);
+      await existingChat.save();
+    }
+
+    res.status(200).send({ msg: "Chat cleared successfully!" });
+  } catch (error) {
+    res.status(500).send({ msg: "Server error while clearing chat!" });
+    console.error(error);
+  }
+});
+
+app.delete("/deleteContact/:contactId", verifyToken, async (req, res) => {
+  const contactId = req.params.contactId;
+  const userId = req.user.id;
+  try {
+    const existingUser = await user.findById(userId);
+    if (!existingUser) {
+      return res.status(404).send({ msg: "User not found!" });
+    }
+    
+    existingUser.contacts = existingUser.contacts.filter(
+      (c) => c.userId.toString() !== contactId
+    )
+    await existingUser.save();
+    res.status(200).send({ msg: "Contact deleted successfully!" });
+  } catch (error) {
+    res.status(500).send({ msg: "Server error while deleting contact!" });
+    console.error(error);
+  }
+});
+
+app.post("/blockContact/:contactId", verifyToken, async (req, res) => {
+  const contactId = req.params.contactId;
+  const userId = req.user.id;
+  try {
+    const existingUser = await user.findById(userId);
+    if (!existingUser) {
+      return res.status(404).send({ msg: "User not found!" });
+    }
+
+    if (existingUser.blockedUsers.includes(contactId)) {
+      return res.status(400).send({ msg: "Contact is already blocked!" });
+    }
+
+    existingUser.blockedUsers.push(contactId);
+    await existingUser.save();
+    
+    res.status(200).send({ msg: "Contact blocked successfully!" });
+  } catch (error) {
+    res.status(500).send({ msg: "Server error while blocking contact!" });
+    console.error(error);
+  }
+});
+
+app.post("/unblockContact/:contactId", verifyToken, async (req, res) => {
+  const contactId = req.params.contactId;
+  const userId = req.user.id;
+  try {
+    const existingUser = await user.findById(userId);
+    if (!existingUser) {
+      return res.status(404).send({ msg: "User not found!" });
+    }
+    if (!existingUser.blockedUsers.includes(contactId)) {
+      return res.status(400).send({ msg: "Contact is not blocked!" });
+    }
+    existingUser.blockedUsers = existingUser.blockedUsers.filter(
+      (id) => id.toString() !== contactId
+    );
+    await existingUser.save();
+    res.status(200).send({ msg: "Contact unblocked successfully!" });
+  } catch (error) {
+    res.status(500).send({ msg: "Server error while unblocking contact!" });
+    console.error(error);
+  }
+});
+  
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {

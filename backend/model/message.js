@@ -6,6 +6,7 @@ const messageSchema = new mongoose.Schema(
     content: { type: String, trim: true },
     chat: { type: mongoose.Schema.Types.ObjectId, ref: "Chat" },
     image: { type: String }, 
+    seen: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

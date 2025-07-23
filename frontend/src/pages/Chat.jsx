@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState } from "react";
 import { ChatContext } from "../components/Context";
-import { FiLogOut, FiPlus, FiMoreVertical, FiTrash2, FiUserX, FiDownload, FiInfo } from "react-icons/fi";
+import { FiLogOut, FiPlus, FiMoreVertical, FiTrash2, FiUserX, FiInfo } from "react-icons/fi";
+import { MdHowToReg } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
 import { FaPaperclip } from "react-icons/fa";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,6 +11,7 @@ import Loader from "../components/Loader";
 import { io } from "socket.io-client";
 import { useRef } from "react";
 import EmojiPicker from "emoji-picker-react"
+import ContactInfo from "../components/ContactInfo";
 
 const SOCKET_URL = import.meta.env.VITE_BASE_URL;
 
@@ -19,6 +21,7 @@ const Chat = () => {
   const [showOptions, setShowOptions] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showContactInfo, setShowContactInfo] = useState(false);
 
   const [updatedUsername, setUpdatedUsername] = useState(user?.username || "");
   const [updatedEmail, setUpdatedEmail] = useState(user?.email || "");
@@ -46,6 +49,8 @@ const Chat = () => {
 
   const typingTimeOutRef = useRef(null);
   const latestMessageRef = useRef(null);
+
+  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
@@ -288,15 +293,115 @@ const Chat = () => {
     }
   };
 
+  const handleClearChat = async () => {
+    if (!chatId) return;
+    try {
+      const res = await fetch(`${BASE_URL}/clearChat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ chatId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessages([]);
+        toast.success(data.msg);
+      }
+    } catch (error) {
+      console.error("Error clearing chat:", error);
+      toast.error("Failed to clear chat");
+    }
+  }
+
+  const handleDeleteContact = async (contactId) => {
+    if (!contactId) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/deleteContact/${contactId}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.msg);
+        setContacts((prev) => prev.filter((c) => c._id !== contactId));
+        if (selectedContact?._id === contactId) {
+          setSelectedContact(null);
+          setChatId(null);
+          setMessages([]);
+          setShowContactInfo(false);
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting contact:", error);
+      toast.error("Failed to delete contact");
+    }
+    finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBlockContact = async () => {
+    if (!selectedContact?._id) return;
+    try {
+      const res = await fetch(`${BASE_URL}/blockContact/${selectedContact._id}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.msg);
+        setUser((prev) => {
+          return {
+            ...prev,
+            blockedUsers: [...prev.blockedUsers, selectedContact._id]
+          }
+        })
+      }
+    } catch (error) {
+      console.error("Error blocking user:", error);
+      toast.error("Failed to block user");
+    }
+  };
+
+  const handleUnblockContact = async () => {
+    if (!selectedContact?._id) return;
+    try {
+      const res = await fetch(`${BASE_URL}/unblockContact/${selectedContact._id}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        toast.success(data.msg);
+        setUser((prev) => {
+          return {
+            ...prev,
+            blockedUsers: prev.blockedUsers.filter((userId) => userId !== selectedContact._id)
+          }
+        })
+      }
+    } catch (error) {
+      console.error("Error unblocking user:", error);
+      toast.error("Failed to unblock user");
+    }
+  };
+
   useEffect(() => {
     if (latestMessageRef.current) {
       latestMessageRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
 
+  {/* Latest message logic */ }
   const latestMessage = messages.length > 0 ? messages.length - 1 : null;
 
+  {/* Filter contacts based on search input */ }
   const filteredContacts = contacts.filter((c) => c.username.toLowerCase().includes(searchContact.toLowerCase()));
+
+  {/* Check if the user has blocked the selected contact or vice versa */ }
+  const youBlockedThem = user.blockedUsers.includes(selectedContact?._id);
+  const theyBlockedYou = selectedContact?.blockedUsers.includes(user._id);
 
   return (
     <div className="h-screen w-screen flex text-gray-50">
@@ -366,14 +471,21 @@ const Chat = () => {
                       ? `${BASE_URL}/uploads/${u.avatar}`
                       : "/default-avatar.webp"
                   }
-                  alt={u.username}
                   className="w-10 h-10 rounded-full object-cover"
                 />
                 <div className="flex flex-col">
                   <p className="text-sm font-medium text-white">{u.username}</p>
-                  <p className={`text-xs ${u.isOnline ? "text-green-400" : "text-gray-400"}`}>
-                    {u.isOnline ? "Online" : "Offline"}
-                  </p>
+                  {
+                    user.blockedUsers.includes(u._id) ? (
+                      <p className="text-xs text-red-400">You blocked this user</p>
+                    ) : u.blockedUsers.includes(user._id) ? (
+                      <p className="text-xs text-red-400">This user blocked you</p>
+                    ) : (
+                      <p className={`text-xs ${u.isOnline ? "text-green-400" : "text-gray-400"}`}>
+                        {u.isOnline ? "Online" : "Offline"}
+                      </p>
+                    )
+                  }
                 </div>
               </div>
             ))
@@ -429,7 +541,7 @@ const Chat = () => {
           <>
             {/* Chat Header */}
             <div className="p-3.5 border-b border-gray-600 flex items-center gap-4 justify-between">
-              <div className="flex items-center">
+              <div className="flex items-center gap-4 cursor-default" onClick={() => setShowContactInfo(true)}>
                 <img
                   src={
                     selectedContact.avatar
@@ -448,29 +560,50 @@ const Chat = () => {
                   </p>
                 </div>
               </div>
-              <button onClick={() => setShowChatOptions(true)}>
+              <button onClick={() => setShowChatOptions(!showChatOptions)}>
                 <FiMoreVertical size={20} />
               </button>
               {/* Chat Options */}
               {showChatOptions && (
                 <div className="absolute right-4 top-12 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-30 w-48 py-2">
-                  <button onClick={() =>setShowChatOptions(!showChatOptions)} className="flex items-center w-full px-4 py-2 text-sm text-white hover:bg-gray-700 transition">
-                    <FiTrash2 className="mr-2 text-red-400" size={16} />
-                    Clear Chat
-                  </button>
-                  <button onClick={() =>setShowChatOptions(!showChatOptions)} className="flex items-center w-full px-4 py-2 text-sm text-white hover:bg-gray-700 transition">
-                    <FiUserX className="mr-2 text-yellow-400" size={16} />
-                    Block Contact
-                  </button>
-                  <div className="border-t border-gray-600 my-2" />
-                  <button onClick={() =>setShowChatOptions(!showChatOptions)} className="flex items-center w-full px-4 py-2 text-sm text-white hover:bg-gray-700 transition">
-                    <FiDownload className="mr-2 text-blue-400" size={16} />
-                    Download Chat
-                  </button>
-                  <button onClick={() =>setShowChatOptions(!showChatOptions)} className="flex items-center w-full px-4 py-2 text-sm text-white hover:bg-gray-700 transition">
+                  <button onClick={() => {
+                    setShowChatOptions(!showChatOptions)
+                    setShowContactInfo(true);
+                  }} className="flex items-center w-full px-4 py-2 text-sm text-white hover:bg-gray-700 transition">
                     <FiInfo className="mr-2 text-green-400" size={16} />
                     Contact Info
                   </button>
+                  <button
+                    onClick={() => {
+                      user.blockedUsers.includes(selectedContact._id)
+                        ? handleUnblockContact()
+                        : handleBlockContact();
+                      setShowChatOptions(false);
+                    }}
+                    className="flex items-center w-full px-4 py-2 text-sm text-white hover:bg-gray-700 transition"
+                  >
+                    {
+                      user.blockedUsers.includes(selectedContact._id) ? (
+                        <>
+                          <MdHowToReg className="mr-2 text-red-400" size={16} />
+                          Unblock Contact
+                        </>
+                      ) : (
+                        <>
+                          <FiUserX className="mr-2 text-red-400" size={16} />
+                          Block Contact
+                        </>
+                      )
+                    }
+                  </button>
+                  <button onClick={() => {
+                    setShowChatOptions(!showChatOptions)
+                    handleClearChat();
+                  }} className="flex items-center w-full px-4 py-2 text-sm text-white hover:bg-gray-700 transition">
+                    <FiTrash2 className="mr-2 text-red-400" size={16} />
+                    Clear Chat
+                  </button>
+                  <div className="border-t border-gray-600 my-2" />
                 </div>
               )}
             </div>
@@ -530,7 +663,13 @@ const Chat = () => {
                   </motion.div>
                 ))
               ) : (
-                <p className="text-gray-500 flex justify-center items-center h-[30vh]">No messages yet</p>
+                <div className="flex flex-col items-center justify-center h-[80vh]">
+                  <img
+                    src="/chat-placeholder.png"
+                    className="w-24 h-24 mx-auto mb-4 opacity-20"
+                  />
+                  <p className="text-gray-500 flex justify-center items-center">No messages yet</p>
+                </div>
               )}
             </div>
 
@@ -560,41 +699,60 @@ const Chat = () => {
             </AnimatePresence>
 
             {/* Message Input */}
-            <form className="p-4 border-t border-gray-600 flex items-center gap-3 bg-gray-800" onSubmit={handleSendMessage}>
-              <button className="text-gray-400 hover:text-white transition" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
-                <BsEmojiSmile size={22} />
-              </button>
-              {/* Emoji Picker */}
-              {showEmojiPicker && (
-                <div className="absolute bottom-[60px] z-50 ">
-                  <EmojiPicker theme="dark" onEmojiClick={(emojiData) => {
-                    setMessage((prev) => prev + emojiData.emoji);
-                    setShowEmojiPicker(false);
-                  }} />
+            {
+              youBlockedThem ? (
+                <div className="p-4 flex flex-col items-center justify-center text-center text-red-400">
+                  <p>You have blocked this contact. Unblock to send messages.</p>
+                  <button
+                    className="text-blue-500 hover:text-blue-400 mt-2 cursor-pointer flex items-center gap-1"
+                    onClick={handleUnblockContact}
+                  >
+                    <MdHowToReg fontSize={18} />
+                    Unblock
+                  </button>
                 </div>
-              )}
-              <label className="cursor-pointer text-gray-400 hover:text-white transition">
-                <FaPaperclip size={20} />
-                <input type="file" className="hidden" accept="image/*" onChange={(e) => {
-                  const file = e.target.files[0];
-                  if (file && file.type.startsWith("image/")
-                  ) {
-                    setSelectedImage(file);
-                  }
-                }} />
-              </label>
-              <input
-                type="text"
-                placeholder="Type a message..."
-                className="flex-1 px-4 py-2 bg-gray-700 text-white rounded outline-none border border-gray-600"
-                value={message}
-                onChange={(e) => {
-                  setMessage(e.target.value);
-                  socket?.emit("typing", { chatId, userId: user._id });
-                }}
-              />
-              <button className="bg-[#665bff] hover:bg-[#5b4ffd] px-4 py-2 rounded" type="submit">Send</button>
-            </form>
+              ) : theyBlockedYou ? (
+                <div className="p-4 text-center text-red-400">
+                  <p>You’ve been blocked by this contact. You cannot send messages.</p>
+                </div>
+              ) : (
+                <form className="p-4 border-t border-gray-600 flex items-center gap-3 bg-gray-800" onSubmit={handleSendMessage}>
+                  <button className="text-gray-400 hover:text-white transition" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
+                    <BsEmojiSmile size={22} />
+                  </button>
+                  {/* Emoji Picker */}
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-[60px] z-50 ">
+                      <EmojiPicker theme="dark" onEmojiClick={(emojiData) => {
+                        setMessage((prev) => prev + emojiData.emoji);
+                        setShowEmojiPicker(false);
+                      }} />
+                    </div>
+                  )}
+                  <label className="cursor-pointer text-gray-400 hover:text-white transition">
+                    <FaPaperclip size={20} />
+                    <input type="file" className="hidden" accept="image/*" onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file && file.type.startsWith("image/")
+                      ) {
+                        setSelectedImage(file);
+                      }
+                    }} />
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Type a message..."
+                    className="flex-1 px-4 py-2 bg-gray-700 text-white rounded outline-none border border-gray-600"
+                    value={message}
+                    onChange={(e) => {
+                      setMessage(e.target.value);
+                      socket?.emit("typing", { chatId, userId: user._id });
+                    }}
+                  />
+                  <button className="bg-[#665bff] hover:bg-[#5b4ffd] px-4 py-2 rounded" type="submit">Send</button>
+                </form>
+              )
+            }
           </>
         ) : (
           // Placeholder if no contact is selected
@@ -709,7 +867,10 @@ const Chat = () => {
           </motion.div>
         )}
       </AnimatePresence>
-
+      {/* Contact Info Modal */}
+      <ContactInfo show={showContactInfo} onClose={() => setShowContactInfo(false)} contact={selectedContact}
+        handleDeleteContact={handleDeleteContact} selectedContact={selectedContact} loading={loading} handleBlockContact={handleBlockContact} handleUnblockContact={handleUnblockContact}
+      />
     </div>
   );
 };
