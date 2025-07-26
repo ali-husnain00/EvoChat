@@ -1,13 +1,13 @@
 import React, { useContext, useEffect, useState } from "react";
 import { ChatContext } from "../components/Context";
-import { FiLogOut, FiPlus, FiMoreVertical, FiTrash2, FiUserX, FiInfo } from "react-icons/fi";
+import { FiLogOut, FiPlus, FiMoreVertical, FiTrash2, FiUserX, FiInfo, FiSend } from "react-icons/fi";
 import { MdHowToReg } from "react-icons/md";
 import { BsEmojiSmile } from "react-icons/bs";
 import { FaPaperclip } from "react-icons/fa";
+import { HiArrowLeft } from "react-icons/hi";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-import Loader from "../components/Loader";
 import { io } from "socket.io-client";
 import { useRef } from "react";
 import EmojiPicker from "emoji-picker-react"
@@ -41,6 +41,7 @@ const Chat = () => {
   const [messages, setMessages] = useState([]);
 
   const [message, setMessage] = useState("");
+  const [unseenMessages, setUnseenMessages] = useState([]);
   const [socket, setSocket] = useState(null);
   const [typingUser, setTypingUser] = useState(null);
 
@@ -51,6 +52,8 @@ const Chat = () => {
   const latestMessageRef = useRef(null);
 
   const [loading, setLoading] = useState(false);
+
+  const [showChat, setShowChat] = useState(false)
 
   const navigate = useNavigate();
 
@@ -176,8 +179,11 @@ const Chat = () => {
   };
 
   useEffect(() => {
-    getMyContacts();
-  }, []);
+    if (user) {
+      getMyContacts();
+      getUnseenMessages();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (selectedContact) {
@@ -227,7 +233,6 @@ const Chat = () => {
     };
   }, [socket]);
 
-
   useEffect(() => {
     if (!socket || !chatId) return;
 
@@ -251,6 +256,11 @@ const Chat = () => {
 
     const handleNewMessage = (newMsg) => {
       setMessages((prev) => [...prev, newMsg]);
+      if (chatId) {
+        setTimeout(() => {
+          markMessagesAsSeen();
+        }, 300);
+      }
     };
 
     socket.on("messageReceived", handleNewMessage);
@@ -387,6 +397,47 @@ const Chat = () => {
     }
   };
 
+  const getUnseenMessages = async () => {
+    if (!user?._id) return;
+    try {
+      const res = await fetch(`${BASE_URL}/getUnseenMessages`, {
+        method: "GET",
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setUnseenMessages(data.unseenMessages);
+      }
+    } catch (error) {
+      console.error("Error fetching unseen messages:", error);
+    }
+  }
+
+  const markMessagesAsSeen = async () => {
+    if (!chatId || !user?._id) return;
+    try {
+      const res = await fetch(`${BASE_URL}/markMessagesSeen`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ chatId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        getUnseenMessages()
+      }
+    } catch (error) {
+      console.error("Error marking messages as seen:", error);
+      toast.error("Failed to mark messages as seen");
+    }
+  };
+
+  useEffect(() => {
+    if (chatId) {
+      markMessagesAsSeen();
+    }
+  }, [chatId])
+
   useEffect(() => {
     if (latestMessageRef.current) {
       latestMessageRef.current.scrollIntoView({ behavior: "smooth" });
@@ -404,9 +455,11 @@ const Chat = () => {
   const theyBlockedYou = selectedContact?.blockedUsers.includes(user._id);
 
   return (
-    <div className="h-screen w-screen flex text-gray-50">
+    <div className="w-screen h-screen flex text-gray-50 overflow-hidden">
       {/* Sidebar */}
-      <div className="w-full md:w-[450px] bg-gray-900 flex flex-col relative border-r border-gray-600">
+      <div   className={`h-full min-h-full relative w-full md:w-[350px] lg:w-[450px] flex flex-col bg-gray-900 border-r border-gray-700 overflow-y-auto ${
+      showChat ? "hidden" : "flex"
+    } md:flex`}>
         {/* Header */}
         <div className="p-4 flex items-center justify-between border-b border-gray-600">
           <img src="/EvoChat_logo1.png" alt="EvoChat" className="w-11 h-11" />
@@ -459,36 +512,54 @@ const Chat = () => {
           {isFetchingContacts ? (
             <div className="flex items-center justify-center p-4 text-gray-500">Loading...</div>
           ) : filteredContacts.length > 0 ? (
-            filteredContacts.map((u) => (
-              <div
-                key={u._id}
-                onClick={() => setSelectedContact(u)}
-                className="flex items-center gap-3 p-3 bg-gray-900 hover:bg-gray-800 transition cursor-pointer border-b border-white/10"
-              >
-                <img
-                  src={
-                    u?.avatar
-                      ? `${BASE_URL}/uploads/${u.avatar}`
-                      : "/default-avatar.webp"
-                  }
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-                <div className="flex flex-col">
-                  <p className="text-sm font-medium text-white">{u.username}</p>
+            filteredContacts.map((u) => {
+              const unseenInfo = unseenMessages?.find(
+                msg => msg.receiverId === u._id
+              );
+              return (
+                <div
+                  key={u._id}
+                  onClick={() => {
+                    setSelectedContact(u);
+                    unseenInfo ? unseenInfo.unseenCount = 0 : null;
+                    setShowChat(true)
+                  }}
+                  className="flex items-center justify-between gap-3 p-3 bg-gray-900 hover:bg-gray-800 transition cursor-pointer border-b border-white/10"
+                >
+                  <div className="flex gap-3 items-center">
+                    <img
+                      src={
+                        u?.avatar
+                          ? `${BASE_URL}/uploads/${u.avatar}`
+                          : "/default-avatar.webp"
+                      }
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                    <div className="flex flex-col">
+                      <p className="text-sm font-medium text-white">{u.username}</p>
+                      {
+                        user.blockedUsers.includes(u._id) ? (
+                          <p className="text-xs text-red-400">You blocked this user</p>
+                        ) : u.blockedUsers.includes(user._id) ? (
+                          <p className="text-xs text-red-400">This user blocked you</p>
+                        ) : (
+                          <p className={`text-xs ${u.isOnline ? "text-green-400" : "text-gray-400"}`}>
+                            {u.isOnline ? "Online" : "Offline"}
+                          </p>
+                        )
+                      }
+                    </div>
+                  </div>
                   {
-                    user.blockedUsers.includes(u._id) ? (
-                      <p className="text-xs text-red-400">You blocked this user</p>
-                    ) : u.blockedUsers.includes(user._id) ? (
-                      <p className="text-xs text-red-400">This user blocked you</p>
-                    ) : (
-                      <p className={`text-xs ${u.isOnline ? "text-green-400" : "text-gray-400"}`}>
-                        {u.isOnline ? "Online" : "Offline"}
-                      </p>
+                    unseenInfo?.unseenCount > 0 && (
+                      <span className="bg-[#665bff] text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                        {unseenInfo.unseenCount}
+                      </span>
                     )
                   }
                 </div>
-              </div>
-            ))
+              )
+            })
           ) : (
             <p className="text-gray-400 px-4 flex justify-center items-center h-[30vh]">No Contacts Found</p>
           )}
@@ -536,13 +607,17 @@ const Chat = () => {
       </div>
 
       {/* Chat Window */}
-      <div className="flex-1 flex flex-col bg-gray-900">
+      <div className={`h-full min-h-full flex-1 flex flex-col bg-gray-900 overflow-y-auto ${
+      showChat ? "flex" : "hidden"
+    } md:flex`}>
         {selectedContact ? (
           <>
             {/* Chat Header */}
             <div className="p-3.5 border-b border-gray-600 flex items-center gap-4 justify-between">
-              <div className="flex items-center gap-4 cursor-default" onClick={() => setShowContactInfo(true)}>
-                <img
+              <div className="flex items-center gap-4 cursor-default">
+                <HiArrowLeft className="w-6 h-6 text-white cursor-pointer" onClick={() => setShowChat(false)} />
+                <div className="flex gap-3 items-center" onClick={() =>setShowContactInfo(true)}>
+                  <img
                   src={
                     selectedContact.avatar
                       ? `${BASE_URL}/uploads/${selectedContact.avatar}`
@@ -558,6 +633,7 @@ const Chat = () => {
                       <span className="text-gray-400 ml-2 italic">(Typing...)</span>
                     )}
                   </p>
+                </div>
                 </div>
               </div>
               <button onClick={() => setShowChatOptions(!showChatOptions)}>
@@ -749,7 +825,9 @@ const Chat = () => {
                       socket?.emit("typing", { chatId, userId: user._id });
                     }}
                   />
-                  <button className="bg-[#665bff] hover:bg-[#5b4ffd] px-4 py-2 rounded" type="submit">Send</button>
+                  <button className="bg-[#665bff] hover:bg-[#5b4ffd] cursor-pointer p-3 rounded-full" type="submit">
+                    <FiSend fontSize={18}/>
+                  </button>
                 </form>
               )
             }

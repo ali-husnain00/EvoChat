@@ -289,9 +289,9 @@ app.post("/getOrCreateChat", verifyToken, async (req, res) => {
       const messages = await message
         .find({ chat: newChat._id })
         .sort({ createdAt: 1 });
-        if (newChat.deletedBy?.includes(userId)) {
-          return res.status(200).send({ chatId: newChat._id, messages: [] });
-        }
+      if (newChat.deletedBy?.includes(userId)) {
+        return res.status(200).send({ chatId: newChat._id, messages: [] });
+      }
       return res.status(200).send({ chatId: newChat._id, messages });
     }
 
@@ -392,10 +392,10 @@ app.delete("/deleteContact/:contactId", verifyToken, async (req, res) => {
     if (!existingUser) {
       return res.status(404).send({ msg: "User not found!" });
     }
-    
+
     existingUser.contacts = existingUser.contacts.filter(
       (c) => c.userId.toString() !== contactId
-    )
+    );
     await existingUser.save();
     res.status(200).send({ msg: "Contact deleted successfully!" });
   } catch (error) {
@@ -419,7 +419,7 @@ app.post("/blockContact/:contactId", verifyToken, async (req, res) => {
 
     existingUser.blockedUsers.push(contactId);
     await existingUser.save();
-    
+
     res.status(200).send({ msg: "Contact blocked successfully!" });
   } catch (error) {
     res.status(500).send({ msg: "Server error while blocking contact!" });
@@ -448,7 +448,84 @@ app.post("/unblockContact/:contactId", verifyToken, async (req, res) => {
     console.error(error);
   }
 });
-  
+
+app.get("/getUnseenMessages", verifyToken, async (req, res) => {
+  const userId = req.user.id;
+
+  try {
+    const existingUser = await user.findById(userId);
+    if (!existingUser) {
+      return res.status(404).send({ msg: "User not found!" });
+    }
+
+    const chats = await chat
+      .find({ users: userId })
+      .populate("latestMessage users");
+    const unseenResults = await Promise.all(
+      chats.map(async (chatItem) => {
+        const unseenMsgs = await message.find({
+          chat: chatItem._id,
+          sender: { $ne: userId },
+          seen: false,
+        });
+
+        if (unseenMsgs.length > 0) {
+          const receiver = chatItem.users.find(
+            (u) => u._id.toString() !== userId
+          );
+
+          return {
+            chatId: chatItem._id,
+            unseenCount: unseenMsgs.length,
+            receiverId: receiver._id,
+            latestMessage: chatItem.latestMessage,
+          };
+        } else {
+          return null;
+        }
+      })
+    );
+
+    const unseenMessages = unseenResults.filter((item) => item !== null);
+
+    res.status(200).send({ unseenMessages });
+  } catch (error) {
+    res
+      .status(500)
+      .send({ msg: "Server error while fetching unseen messages!" });
+    console.error("Error in /getUnseenMessages:", error);
+  }
+});
+
+app.post("/markMessagesSeen", verifyToken, async (req, res) => {
+  const { chatId } = req.body;
+  const userId = req.user.id;
+
+  try {
+    const existingChat = await chat.findById(chatId);
+    if (!existingChat) {
+      return res.status(404).send({ msg: "Chat not found!" });
+    }
+
+    const unseenMessages = await message.find({
+      chat: chatId,
+      sender: { $ne: userId },
+      seen: false,
+    });
+    if (unseenMessages.length > 0) {
+      await message.updateMany(
+        { _id: { $in: unseenMessages.map((msg) => msg._id) } },
+        { $set: { seen: true } }
+      );
+    }
+    res.status(200).send({ msg: "Messages marked as seen successfully!" });
+  } catch (error) {
+    res
+      .status(500)
+      .send({ msg: "Server error while marking messages as seen!" });
+    console.error("Error in /markMessagesSeen:", error);
+  }
+});
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {

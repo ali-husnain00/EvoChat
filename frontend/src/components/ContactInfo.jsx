@@ -21,7 +21,7 @@ const ContactInfo = ({ show, onClose, contact, handleDeleteContact, selectedCont
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0.9, opacity: 0 }}
                         transition={{ type: "spring", stiffness: 180, damping: 18 }}
-                        className="bg-gray-700 text-white rounded-2xl shadow-2xl w-full max-w-lg p-6 relative"
+                        className="bg-gray-700 text-white rounded-2xl shadow-2xl w-[90%] max-w-lg  p-6 relative"
                     >
                         {/* Close Icon */}
                         <button

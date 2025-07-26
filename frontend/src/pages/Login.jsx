@@ -54,12 +54,12 @@ const Login = () => {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
-        className="w-full max-w-md bg-white/10 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-white/10"
+        className="w-[90%] max-w-sm  bg-white/10 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-white/10"
       >
         <div className="flex flex-col items-center mb-6">
           <img src={logo} alt="EvoChat" className="w-16 mb-4 drop-shadow-lg" />
           <h2 className="text-white text-3xl font-bold">Login to EvoChat</h2>
-          <p className="text-gray-300 text-sm mt-1">Access your messages, contacts, and conversations.</p>
+          <p className="text-gray-300 text-center text-sm mt-1">Access your messages, contacts, and conversations.</p>
         </div>
 
         <form onSubmit={handleSubmit} >
