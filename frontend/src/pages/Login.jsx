@@ -54,11 +54,11 @@ const Login = () => {
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ duration: 0.5 }}
-        className="w-[90%] max-w-md  bg-white/10 backdrop-blur-xl rounded-2xl shadow-2xl p-8 border border-white/10"
+        className="w-[95%] max-w-md  bg-white/10 backdrop-blur-xl rounded-2xl shadow-2xl p-6 border border-white/10"
       >
         <div className="flex flex-col items-center mb-6">
           <img src={logo} alt="EvoChat" className="w-16 mb-4 drop-shadow-lg" />
-          <h2 className="text-white text-3xl font-bold text-center">Login to EvoChat</h2>
+          <h2 className="text-white md:text-3xl font-bold text-center text-2xl">Login to EvoChat</h2>
           <p className="text-gray-300 text-center text-sm mt-1">Access your messages, contacts, and conversations.</p>
         </div>
 
@@ -68,7 +68,7 @@ const Login = () => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Email"
-            className="w-full mb-4 py-2 px-4 bg-white/5 rounded text-white placeholder-gray-400 focus:outline-none"
+            className="w-full mb-4 py-2 px-3 md:px-4 bg-white/5 rounded text-white placeholder-gray-400 focus:outline-none"
           />
           <input
             type="password"
