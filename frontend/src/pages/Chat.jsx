@@ -45,6 +45,9 @@ const Chat = () => {
   const [socket, setSocket] = useState(null);
   const [typingUser, setTypingUser] = useState(null);
 
+  const [deleteMessageModal, setDeleteMessageModal] = useState(false)
+  const [messageToDeleteId, setMessageToDeleteId] = useState(null);
+
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showChatOptions, setShowChatOptions] = useState(false);
 
@@ -167,7 +170,6 @@ const Chat = () => {
       });
       const data = await res.json();
       if (res.ok) {
-        console.log("Chat retrieved/created:", data.chatId);
         setChatId(data.chatId);
         setMessages(data.messages || []);
       } else {
@@ -203,16 +205,16 @@ const Chat = () => {
     setSocket(newSocket);
 
     newSocket.on("connect", () => {
-      console.log("✅ Connected to socket:", newSocket.id);
+      // console.log("✅ Connected to socket:", newSocket.id);
       newSocket.emit("online", user._id);
     });
 
     newSocket.on("disconnect", () => {
-      console.log("⚠️ Disconnected from socket:", newSocket.id);
+      // console.log("⚠️ Disconnected from socket:", newSocket.id);
     });
 
     return () => {
-      console.log("🔌 Cleaning up socket");
+      // console.log("🔌 Cleaning up socket");
       newSocket.disconnect();
     };
   }, [user]);
@@ -432,6 +434,34 @@ const Chat = () => {
     }
   };
 
+  const handleDeleteMessage = async () => {
+  if (!messageToDeleteId || !chatId) return;
+
+  try {
+    const res = await fetch(`${BASE_URL}/deleteMessage`, {
+      method: "DELETE",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({ messageToDeleteId, chatId }),
+    });
+
+    const data = await res.json();
+
+    if (res.ok) {
+      toast.success(data.msg);
+      setMessages((prev) =>
+        prev.filter((msg) => msg._id !== messageToDeleteId)
+      );
+      setMessageToDeleteId(null)
+    }
+  } catch (error) {
+    toast.error("Failed to delete message.");
+    console.error(error);
+  }
+};
+
   useEffect(() => {
     if (chatId) {
       markMessagesAsSeen();
@@ -457,9 +487,8 @@ const Chat = () => {
   return (
     <div className="w-screen h-screen flex text-gray-50 overflow-hidden">
       {/* Sidebar */}
-      <div   className={`h-full min-h-full relative w-full md:w-[350px] lg:w-[450px] flex flex-col bg-gray-900 border-r border-gray-700 overflow-y-auto ${
-      showChat ? "hidden" : "flex"
-    } md:flex`}>
+      <div className={`h-full min-h-full relative w-full md:w-[350px] lg:w-[450px] flex flex-col bg-gray-900 border-r border-gray-700 overflow-y-auto ${showChat ? "hidden" : "flex"
+        } md:flex`}>
         {/* Header */}
         <div className="p-4 flex items-center justify-between border-b border-gray-600">
           <img src="/EvoChat_logo1.png" alt="EvoChat" className="w-11 h-11" />
@@ -607,33 +636,32 @@ const Chat = () => {
       </div>
 
       {/* Chat Window */}
-      <div className={`h-full min-h-full flex-1 flex flex-col bg-gray-900 overflow-y-auto ${
-      showChat ? "flex" : "hidden"
-    } md:flex`}>
+      <div className={`h-full min-h-full flex-1 flex flex-col bg-gray-900 overflow-y-auto ${showChat ? "flex" : "hidden"
+        } md:flex`}>
         {selectedContact ? (
           <>
             {/* Chat Header */}
             <div className="p-3.5 border-b border-gray-600 flex items-center gap-4 justify-between">
               <div className="flex items-center gap-4 cursor-default">
                 <HiArrowLeft className="w-6 h-6 text-white cursor-pointer" onClick={() => setShowChat(false)} />
-                <div className="flex gap-3 items-center" onClick={() =>setShowContactInfo(true)}>
+                <div className="flex gap-3 items-center" onClick={() => setShowContactInfo(true)}>
                   <img
-                  src={
-                    selectedContact.avatar
-                      ? `${BASE_URL}/uploads/${selectedContact.avatar}`
-                      : "/default-avatar.webp"
-                  }
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-                <div>
-                  <h2 className="text-lg font-semibold text-white">{selectedContact.username}</h2>
-                  <p className={`text-sm ${selectedContact.isOnline ? "text-green-400" : "text-gray-400"}`}>
-                    {selectedContact.isOnline ? "Online" : "Offline"}
-                    {typingUser === selectedContact._id && (
-                      <span className="text-gray-400 ml-2 italic">(Typing...)</span>
-                    )}
-                  </p>
-                </div>
+                    src={
+                      selectedContact.avatar
+                        ? `${BASE_URL}/uploads/${selectedContact.avatar}`
+                        : "/default-avatar.webp"
+                    }
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">{selectedContact.username}</h2>
+                    <p className={`text-sm ${selectedContact.isOnline ? "text-green-400" : "text-gray-400"}`}>
+                      {selectedContact.isOnline ? "Online" : "Offline"}
+                      {typingUser === selectedContact._id && (
+                        <span className="text-gray-400 ml-2 italic">(Typing...)</span>
+                      )}
+                    </p>
+                  </div>
                 </div>
               </div>
               <button onClick={() => setShowChatOptions(!showChatOptions)}>
@@ -705,10 +733,14 @@ const Chat = () => {
                     }}
                   >
                     <h4
-                      className={`font-semibold mb-1 ${msg.sender === user._id ? "text-purple-300" : "text-gray-300"
+                      className={`font-semibold flex justify-between items-center mb-1 ${msg.sender === user._id ? "text-purple-300" : "text-gray-300"
                         }`}
                     >
                       {msg.sender === user._id ? "You" : selectedContact.username}
+                      <FiMoreVertical onClick={() =>{
+                         setDeleteMessageModal(true)
+                         setMessageToDeleteId(msg._id)
+                      }} />
                     </h4>
 
                     {msg.image && (
@@ -826,7 +858,7 @@ const Chat = () => {
                     }}
                   />
                   <button className="bg-[#665bff] hover:bg-[#5b4ffd] cursor-pointer p-3 rounded-full" type="submit">
-                    <FiSend fontSize={18}/>
+                    <FiSend fontSize={18} />
                   </button>
                 </form>
               )
@@ -944,6 +976,35 @@ const Chat = () => {
             </button>
           </motion.div>
         )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {
+          deleteMessageModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="fixed w-full h-full bg-black/50 flex justify-center items-center z-60">
+                <motion.div
+                className="bg-gray-600 p-4 flex flex-col gap-3 rounded-xl"
+                initial = {{scale: 0.9}}
+                animate = {{scale: 1}}
+                exit={{scale: 0.9}}
+                transition={{duration: 0.3}}
+                >
+                  <p className="font-semibold text-white">Do you want to delete this message ?</p>
+                  <div className="flex items-center gap-3">
+                    <button className="px-3 py-2 bg-gray-500 text-white rounded-xl cursor-pointer" onClick={() =>setDeleteMessageModal(false)}>Cancel</button>
+                    <button className="px-3 py-2 bg-red-400 text-white rounded-xl cursor-pointer" onClick={() => {
+                      setDeleteMessageModal(false);
+                      handleDeleteMessage()
+                    }}>Delete</button>
+                  </div>
+                </motion.div>
+            </motion.div>
+          )
+        }
       </AnimatePresence>
       {/* Contact Info Modal */}
       <ContactInfo show={showContactInfo} onClose={() => setShowContactInfo(false)} contact={selectedContact}
