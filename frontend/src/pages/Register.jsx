@@ -60,7 +60,7 @@ const Register = () => {
       >
         <div className="flex flex-col items-center mb-6">
           <img src={logo} alt="EvoChat" className="w-16 mb-4" />
-          <h2 className="text-white text-3xl font-bold">Join EvoChat</h2>
+          <h2 className="text-white text-center text-3xl font-bold">Join EvoChat</h2>
           <p className="text-gray-300 text-sm mt-1">Stay connected. Secure. Fast. Private.</p>
         </div>
         <form onSubmit={handleSubmit}>

@@ -58,7 +58,7 @@ const Login = () => {
       >
         <div className="flex flex-col items-center mb-6">
           <img src={logo} alt="EvoChat" className="w-16 mb-4 drop-shadow-lg" />
-          <h2 className="text-white text-3xl font-bold">Login to EvoChat</h2>
+          <h2 className="text-white text-3xl font-bold text-center">Login to EvoChat</h2>
           <p className="text-gray-300 text-center text-sm mt-1">Access your messages, contacts, and conversations.</p>
         </div>
 

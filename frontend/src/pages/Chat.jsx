@@ -641,7 +641,7 @@ const Chat = () => {
         {selectedContact ? (
           <>
             {/* Chat Header */}
-            <div className="p-3.5 border-b border-gray-600 flex items-center gap-4 justify-between">
+            <div className="p-3.5 border-b border-gray-600 flex items-center gap-4 justify-between shrink-0">
               <div className="flex items-center gap-4 cursor-default">
                 <HiArrowLeft className="w-6 h-6 text-white cursor-pointer" onClick={() => setShowChat(false)} />
                 <div className="flex gap-3 items-center" onClick={() => setShowContactInfo(true)}>
@@ -713,7 +713,7 @@ const Chat = () => {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
               {messages.length > 0 ? (
                 messages.map((msg, index) => (
                   <motion.div
@@ -824,7 +824,7 @@ const Chat = () => {
                   <p>You’ve been blocked by this contact. You cannot send messages.</p>
                 </div>
               ) : (
-                <form className="p-4 border-t border-gray-600 flex items-center gap-3 bg-gray-800" onSubmit={handleSendMessage}>
+                <form className="p-4 sm:p-3 border-t border-gray-600 flex items-center gap-3 bg-gray-800 shrink-0" onSubmit={handleSendMessage}>
                   <button className="text-gray-400 hover:text-white transition" onClick={() => setShowEmojiPicker(!showEmojiPicker)}>
                     <BsEmojiSmile size={22} />
                   </button>
@@ -850,7 +850,7 @@ const Chat = () => {
                   <input
                     type="text"
                     placeholder="Type a message..."
-                    className="flex-1 px-4 py-2 bg-gray-700 text-white rounded outline-none border border-gray-600"
+                    className="flex-1 w-[90%] px-4 py-2 bg-gray-700 text-white rounded outline-none border border-gray-600"
                     value={message}
                     onChange={(e) => {
                       setMessage(e.target.value);
